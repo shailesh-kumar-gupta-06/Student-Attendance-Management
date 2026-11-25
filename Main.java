@@ -54,9 +54,15 @@ class Student {
         return roll + "|" + name.replace("|", " ") + "|" + attended + "|" + held;
     }
 
+    // Prints one table row. rank = 0 means "no rank column".
+    public void display(int rank) {
+        String rollText = (rank > 0) ? rank + ". " + roll : String.valueOf(roll);
+        System.out.printf("%-8s | %-20s | %-10s | %.1f%%%n",
+                rollText, name, attended + "/" + held, getPercentage());
+    }
+
     public void display() {
-        System.out.printf("%-8d | %-20s | %d/%d | %.1f%%%n",
-                roll, name, attended, held, getPercentage());
+        display(0);
     }
 }
 
@@ -120,9 +126,19 @@ public class Main {
         System.out.println("------------------------------------");
     }
 
+    // Reads an integer; keeps asking until valid. Handles end of input safely.
     private static int readInt(String message) {
         while (true) {
             System.out.print(message);
+
+            if (!sc.hasNextLine()) {
+                // No more input (e.g. Ctrl+D or piped input ended): save and quit cleanly.
+                System.out.println();
+                saveData();
+                System.out.println("Input ended. Data saved. Goodbye!");
+                System.exit(0);
+            }
+
             String value = sc.nextLine().trim();
 
             try {
@@ -133,16 +149,34 @@ public class Main {
         }
     }
 
+    // Reads a positive roll number (> 0).
+    private static int readRoll(String message) {
+        while (true) {
+            int roll = readInt(message);
+            if (roll > 0) {
+                return roll;
+            }
+            System.out.println("Roll number must be greater than 0.");
+        }
+    }
+
+    private static String readLine(String message) {
+        System.out.print(message);
+        if (!sc.hasNextLine()) {
+            return "";
+        }
+        return sc.nextLine().trim();
+    }
+
     private static void addStudent() {
-        int roll = readInt("Enter roll number: ");
+        int roll = readRoll("Enter roll number: ");
 
         if (findStudent(roll) != null) {
             System.out.println("A student with roll number " + roll + " already exists.");
             return;
         }
 
-        System.out.print("Enter student name: ");
-        String name = sc.nextLine().trim();
+        String name = readLine("Enter student name: ");
 
         if (name.isEmpty()) {
             System.out.println("Name cannot be empty.");
@@ -157,7 +191,7 @@ public class Main {
     }
 
     private static void markAttendance() {
-        int roll = readInt("Enter roll number: ");
+        int roll = readRoll("Enter roll number: ");
         Student student = findStudent(roll);
 
         if (student == null) {
@@ -165,8 +199,7 @@ public class Main {
             return;
         }
 
-        System.out.print("Enter attendance (P for Present / A for Absent): ");
-        String input = sc.nextLine().trim().toUpperCase();
+        String input = readLine("Enter attendance (P for Present / A for Absent): ").toUpperCase();
 
         if (!input.equals("P") && !input.equals("A")) {
             System.out.println("Invalid attendance. Please enter only P or A.");
@@ -182,7 +215,7 @@ public class Main {
     }
 
     private static void searchStudent() {
-        int roll = readInt("Enter roll number to search: ");
+        int roll = readRoll("Enter roll number to search: ");
         Student student = findStudent(roll);
 
         if (student == null) {
@@ -217,18 +250,19 @@ public class Main {
             return;
         }
 
-        students.sort(Comparator.comparingDouble(Student::getPercentage).reversed());
+        // Sort a COPY so the saved/original order is not changed.
+        // Ties are broken by roll number for a predictable order.
+        ArrayList<Student> sorted = new ArrayList<>(students);
+        sorted.sort(Comparator.comparingDouble(Student::getPercentage).reversed()
+                .thenComparingInt(Student::getRoll));
 
         System.out.println("\nStudents sorted by attendance (High to Low):");
         printHeader();
 
         int rank = 1;
-        for (Student student : students) {
-            System.out.print(rank++ + ". ");
-            student.display();
+        for (Student student : sorted) {
+            student.display(rank++);
         }
-
-        saveData();
     }
 
     private static void displayAllStudents() {
@@ -270,9 +304,14 @@ public class Main {
             String line;
 
             while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) {
+                    continue; // ignore blank lines silently
+                }
+
                 String[] data = line.split("\\|", -1);
 
                 if (data.length != 4) {
+                    System.out.println("Skipping invalid record: " + line);
                     continue;
                 }
 
@@ -282,9 +321,11 @@ public class Main {
                     int attended = Integer.parseInt(data[2].trim());
                     int held = Integer.parseInt(data[3].trim());
 
-                    if (!name.isEmpty() && attended >= 0 && held >= 0 && attended <= held
-                            && findStudent(roll) == null) {
+                    if (roll > 0 && !name.isEmpty() && attended >= 0 && held >= 0
+                            && attended <= held && findStudent(roll) == null) {
                         students.add(new Student(roll, name, attended, held));
+                    } else {
+                        System.out.println("Skipping invalid record: " + line);
                     }
                 } catch (NumberFormatException e) {
                     System.out.println("Skipping invalid record: " + line);
